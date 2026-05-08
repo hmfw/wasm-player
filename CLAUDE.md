@@ -47,48 +47,6 @@ npm run lint       # ESLint 检查
 npm run format     # Prettier 格式化 src/
 ```
 
-## npm 包发布
-
-项目支持作为 Vue 组件库发布到 npm：
-
-**构建库：**
-```bash
-npm run build:lib
-```
-
-**发布流程：**
-1. 修改 `package.json` 中的 `name`（如 `@your-scope/wasm-player`）和 `version`
-2. `npm run build:lib` 构建到 `dist/`
-3. `npm publish` 发布（需先 `npm login`）
-
-**消费者使用：**
-```typescript
-import { WasmPlayer } from 'wasm-player'
-// CSS 已自动内联，无需额外引入
-
-// 在 Vue 组件中使用
-<WasmPlayer src="/videos/demo.mp4" :width="800" :height="450" />
-```
-
-**服务端配置要求：**
-消费者项目需配置 COOP/COEP 头（SharedArrayBuffer 要求）：
-```
-Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: require-corp
-```
-
-Vite 开发服务器配置示例：
-```js
-server: {
-  headers: {
-    'Cross-Origin-Opener-Policy': 'same-origin',
-    'Cross-Origin-Embedder-Policy': 'require-corp',
-  }
-}
-```
-
-**库入口：** `src/index.ts` 导出所有公共 API（组件、composables、类型、工具函数）
-
 ## 架构
 
 Vue 3 + TypeScript 媒体播放器，支持 H.264、H.265/HEVC 视频和 MP3 等音频。核心挑战：浏览器不原生支持 H.265/HEVC，通过 mediabunny CanvasSink 直接解码渲染到 Canvas。
@@ -130,34 +88,6 @@ useMediabunnyPlayer
 - **时间同步**：播放中以 `audioRef.currentTime` 为时钟源，asyncId 机制防止 seek 竞态
 - **音频提取**：`extractAudioToNative` 将音频轨道重封装为 ADTS blob，挂载到原生 `<audio>` 元素
 - **浏览器兼容**：内置 Safari/Chrome 兼容性修复
-
-## 组件 Props
-
-### WasmPlayer（推荐入口）
-
-| Prop | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `src` | `string` | 必填 | 媒体 URL（支持 http/https/blob/data） |
-| `autoplay` | `boolean` | `false` | 自动播放 |
-| `width` | `number` | `800` | 宽度（px） |
-| `height` | `number` | `450` | 高度（px，仅视频） |
-| `poster` | `string` | — | 封面图（仅视频） |
-
-### VideoPlayer / AudioPlayer
-
-VideoPlayer 同 WasmPlayer props（含 `height` / `poster`）。AudioPlayer 仅 `src` + `autoplay`。
-
-### StreamingPlayer
-
-由 WasmPlayer 在所有 `transcode` 分支下自动路由，一般不直接使用。
-
-| Prop | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `src` | `string` | 必填 | 原始媒体 URL |
-| `autoplay` | `boolean` | `false` | 自动播放 |
-| `width` | `number` | `800` | 宽度（px） |
-| `height` | `number` | `450` | 高度（px） |
-| `poster` | `string` | — | 封面图 |
 
 ## 测试
 

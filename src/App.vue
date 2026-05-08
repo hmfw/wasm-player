@@ -23,12 +23,6 @@ const localVideos = [
     format: 'H.265/HEVC MP4',
     size: '6.7M'
   },
-  // {
-  //   name: 'demo-720p',
-  //   url: '/videos/demo-720p.flv',
-  //   format: 'FLV',
-  //   size: '65.0M'
-  // }
 ]
 
 const loadLocalVideo = (url: string) => {

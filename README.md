@@ -134,35 +134,7 @@ useMediabunnyPlayer
 <canvas> 渲染
 ```
 
-mediabunny 的 CanvasSink 内置完整解码管线：
-- 自动管理 VideoDecoder 队列
-- 处理 B-frame 排序（Safari 特殊处理）
-- 跳过 RASL 帧（HEVC）
-- 智能预取与 LRU 缓存
-- Canvas 池复用（零拷贝）
-
 音频通过 `extractAudioToNative` 将编码包重封装为 ADTS 容器，生成 blob URL 挂载到原生 `<audio>` 元素，以 `audioRef.currentTime` 作为视频帧渲染的时钟源，保证音视频同步。
-
-## 项目结构
-
-```
-src/
-├── components/
-│   ├── WasmPlayer.vue        # 智能路由入口（推荐使用）
-│   ├── VideoPlayer.vue       # H.264 原生视频渲染
-│   ├── AudioPlayer.vue       # 音频播放
-│   ├── StreamingPlayer.vue   # H.265/HEVC Canvas 渲染
-│   └── PlayerControls.vue    # 公共控件（播放/进度/音量）
-├── shared/
-│   ├── probeMedia.ts         # mediabunny Input 主线程 probe
-│   ├── types.ts              # ProbeResult、PlaybackDecision 等核心类型
-│   ├── mediaProbe.ts         # 扩展名快判
-│   ├── playbackDecision.ts   # 播放决策逻辑
-│   └── probeFallback.ts      # probe 失败时按扩展名猜测
-└── composables/
-    ├── useMediabunnyPlayer.ts    # mediabunny 播放器核心逻辑（RAF 循环、时间管理、seeking）
-    └── extractAudioToNative.ts   # 音频提取工具：将音频轨道封装为 ADTS blob URL
-```
 
 ## 扩展新格式
 
