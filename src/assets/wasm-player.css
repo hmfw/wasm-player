@@ -1,0 +1,266 @@
+/* ========================================
+   WASM Player 统一样式文件
+   所有播放器组件的样式使用 wasm-player- 前缀
+   ======================================== */
+
+/* CSS 变量定义 */
+:root {
+  --wasm-player-primary: #3498db;
+  --wasm-player-primary-hover: #2980b9;
+  --wasm-player-dark-bg: #2c3e50;
+  --wasm-player-secondary-bg: #34495e;
+  --wasm-player-loading-bg: #f8f9fa;
+  --wasm-player-error-bg: #fee;
+  --wasm-player-error-border: #fcc;
+  --wasm-player-error-text: #c33;
+  --wasm-player-progress-bg: #ecf0f1;
+  --wasm-player-spinner-bg: #f3f3f3;
+  --wasm-player-volume-label: #95a5a6;
+}
+
+/* ========================================
+   公共组件样式
+   ======================================== */
+
+/* 加载状态 */
+.wasm-player-loading {
+  text-align: center;
+  padding: 3rem;
+  background: var(--wasm-player-loading-bg);
+  border-radius: 8px;
+}
+
+/* 旋转动画 */
+.wasm-player-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid var(--wasm-player-spinner-bg);
+  border-top: 4px solid var(--wasm-player-primary);
+  border-radius: 50%;
+  animation: wasm-player-spin 1s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@keyframes wasm-player-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 进度条（用于加载进度显示） */
+.wasm-player-progress-bar {
+  width: 300px;
+  height: 8px;
+  background: var(--wasm-player-progress-bg);
+  border-radius: 4px;
+  margin: 1rem auto 0;
+  overflow: hidden;
+}
+
+.wasm-player-progress-fill {
+  height: 100%;
+  background: var(--wasm-player-primary);
+  transition: width 0.3s;
+}
+
+.wasm-player-warning {
+  background: #fff3cd;
+  color: #664d03;
+  padding: 8px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid #ffecb5;
+}
+/* 错误提示 */
+.wasm-player-error {
+  padding: 1.5rem;
+  background: var(--wasm-player-error-bg);
+  border: 1px solid var(--wasm-player-error-border);
+  border-radius: 8px;
+  color: var(--wasm-player-error-text);
+}
+
+/* ========================================
+   视频播放器样式
+   ======================================== */
+
+.wasm-player-video {
+  margin: 2rem auto;
+}
+
+.wasm-player-video-container {
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.wasm-player-video-wrapper {
+  position: relative;
+  background: #000;
+}
+
+.wasm-player-poster-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  cursor: pointer;
+}
+
+.wasm-player-video video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+/* ========================================
+   音频播放器样式
+   ======================================== */
+
+.wasm-player-audio {
+  background: var(--wasm-player-dark-bg);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin: 2rem auto;
+  max-width: 800px;
+}
+
+.wasm-player-audio .wasm-player-error {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--wasm-player-error-border);
+  border-radius: 0;
+  font-size: 0.9rem;
+}
+
+/* ========================================
+   流式播放器样式
+   ======================================== */
+
+.wasm-player-streaming {
+  margin: 0 auto;
+}
+
+.wasm-player-streaming video {
+  display: block;
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+/* ========================================
+   WasmPlayer 包装器样式
+   ======================================== */
+
+.wasm-player-wrapper {
+  margin: 2rem auto;
+  max-width: 800px;
+}
+
+/* ========================================
+   控制栏样式（视频和音频播放器共用）
+   ======================================== */
+
+.wasm-player-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--wasm-player-dark-bg);
+  color: white;
+}
+
+.wasm-player-audio .wasm-player-controls {
+  padding: 1rem 1.5rem;
+}
+
+.wasm-player-play-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: var(--wasm-player-primary);
+  color: white;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.wasm-player-play-btn:hover {
+  background: var(--wasm-player-primary-hover);
+}
+
+.wasm-player-progress-slider {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none;
+  background: var(--wasm-player-secondary-bg);
+  cursor: pointer;
+}
+
+.wasm-player-progress-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--wasm-player-primary);
+  cursor: pointer;
+}
+
+.wasm-player-progress-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--wasm-player-primary);
+  cursor: pointer;
+  border: none;
+}
+
+.wasm-player-time {
+  font-size: 0.9rem;
+  white-space: nowrap;
+  min-width: 100px;
+}
+
+.wasm-player-volume-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wasm-player-audio .wasm-player-volume-control {
+  font-size: 0.75rem;
+  color: var(--wasm-player-volume-label);
+}
+
+.wasm-player-volume-slider {
+  width: 80px;
+  height: 6px;
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none;
+  background: var(--wasm-player-secondary-bg);
+  cursor: pointer;
+}
+
+.wasm-player-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--wasm-player-primary);
+  cursor: pointer;
+}
+
+.wasm-player-volume-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--wasm-player-primary);
+  cursor: pointer;
+  border: none;
+}
