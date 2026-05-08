@@ -2,7 +2,7 @@
 // 纯渲染视频播放器：只接受一个已经"可播"的 src（无论是原始 URL 还是转码后的 blob URL），
 // 不做任何格式探测或转码。所有路由决策都在上层 WasmPlayer 完成。
 // 如果需要对 H.265 做别的处理，改的是 features/ 下的策略，而不是这里。
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import PlayerControls from './PlayerControls.vue'
 
 interface Props {
@@ -21,6 +21,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const videoRef = ref<HTMLVideoElement | null>(null)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
+const playerContainerRef = ref<HTMLDivElement | null>(null)
 const isPlaying = ref(false)
 const isEnded = ref(false)
 const posterUrl = ref<string | null>(null)
@@ -29,6 +30,9 @@ const duration = ref(0)
 const volume = ref(1)
 const isLoading = ref(false)
 const error = ref<string | null>(null)
+const controlsVisible = ref(false)
+const volumeMuted = ref(false)
+let hideControlsTimer = -1
 
 const togglePlay = async () => {
   if (!videoRef.value) return
@@ -139,6 +143,71 @@ const handleVolumeChange = (vol: number) => {
   }
 }
 
+const showControlsTemporarily = () => {
+  controlsVisible.value = true
+  clearTimeout(hideControlsTimer)
+  hideControlsTimer = window.setTimeout(() => {
+    controlsVisible.value = false
+  }, 2000)
+}
+
+const hideControlsNow = () => {
+  controlsVisible.value = false
+  clearTimeout(hideControlsTimer)
+}
+
+const isTouchDevice = () => 'ontouchstart' in window
+
+const onContainerPointerMove = (e: PointerEvent) => {
+  if (e.pointerType !== 'touch') showControlsTemporarily()
+}
+
+const onContainerPointerLeave = (e: PointerEvent) => {
+  if (e.pointerType === 'touch') return
+  hideControlsNow()
+}
+
+const onContainerClick = () => {
+  if (isTouchDevice()) {
+    controlsVisible.value ? hideControlsNow() : showControlsTemporarily()
+  } else {
+    togglePlay()
+  }
+}
+
+const onControlsClick = () => {
+  showControlsTemporarily()
+}
+
+const handleToggleMute = () => {
+  volumeMuted.value = !volumeMuted.value
+  if (videoRef.value) {
+    videoRef.value.volume = volumeMuted.value ? 0 : volume.value
+  }
+}
+
+const toggleFullscreen = () => {
+  if (document.fullscreenElement) {
+    document.exitFullscreen()
+  } else {
+    playerContainerRef.value?.requestFullscreen().catch(console.error)
+  }
+}
+
+const onKeyDown = (e: KeyboardEvent) => {
+  if (error.value || isLoading.value) return
+  switch (e.code) {
+    case 'Space': case 'KeyK': togglePlay(); break
+    case 'KeyF': toggleFullscreen(); break
+    case 'ArrowLeft': handleSeek(Math.max(0, currentTime.value - 5)); break
+    case 'ArrowRight': handleSeek(Math.min(duration.value, currentTime.value + 5)); break
+    case 'KeyM': handleToggleMute(); break
+    default: return
+  }
+  showControlsTemporarily()
+  e.preventDefault()
+}
+
 const loadVideo = async () => {
   if (!props.src) return
 
@@ -175,6 +244,12 @@ onMounted(() => {
   if (props.src) {
     loadVideo()
   }
+  window.addEventListener('keydown', onKeyDown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeyDown)
+  clearTimeout(hideControlsTimer)
 })
 </script>
 
@@ -189,7 +264,14 @@ onMounted(() => {
       <p>加载失败: {{ error }}</p>
     </div>
 
-    <div v-show="!isLoading && !error" class="wasm-player-video-container">
+    <div
+      v-show="!isLoading && !error"
+      ref="playerContainerRef"
+      class="wasm-player-video-container"
+      @pointermove="onContainerPointerMove"
+      @pointerleave="onContainerPointerLeave"
+      @click="onContainerClick"
+    >
       <div class="wasm-player-video-wrapper" :style="{ height: height + 'px' }">
         <video
           ref="videoRef"
@@ -203,7 +285,7 @@ onMounted(() => {
           v-if="posterUrl && !isPlaying"
           :src="posterUrl"
           class="wasm-player-poster-overlay"
-          @click="togglePlay"
+          @click.stop="togglePlay"
         />
       </div>
 
@@ -218,9 +300,13 @@ onMounted(() => {
         :current-time="currentTime"
         :duration="duration"
         :volume="volume"
+        :controls-visible="controlsVisible"
         @toggle-play="togglePlay"
         @seek="handleSeek"
         @volume-change="handleVolumeChange"
+        @toggle-mute="handleToggleMute"
+        @toggle-fullscreen="toggleFullscreen"
+        @controls-click="onControlsClick"
       />
     </div>
   </div>

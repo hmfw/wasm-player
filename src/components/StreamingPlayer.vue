@@ -1,17 +1,12 @@
 <script setup lang="ts">
-// 长视频(>60s)MSE 流式播放器:把两个 composable 组合起来。
-// - useMediaSourcePipeline 管 MSE 管线(append/remove/updateend 状态机)
-// - useSegmentScheduler   管 20s 分段转码调度与失败重试
-// 本组件只负责:UI 绑定、video 事件 → composable 调用、失败段 UI 提示。
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { useFFmpeg } from '../composables/useFFmpeg'
-import { useMediaSourcePipeline } from '../composables/useMediaSourcePipeline'
-import { useSegmentScheduler } from '../composables/useSegmentScheduler'
+// H.265/HEVC 视频播放器：使用 mediabunny CanvasSink 直接解码渲染到 Canvas
+// 音频：优先使用 Web Audio API，Safari 不支持时回退到原生 <audio> 标签
+import { ref, onBeforeUnmount } from 'vue'
+import { useMediabunnyPlayer } from '../composables/useMediabunnyPlayer'
 import PlayerControls from './PlayerControls.vue'
 
 interface Props {
   src: string
-  duration: number
   autoplay?: boolean
   width?: number
   height?: number
@@ -24,55 +19,53 @@ const props = withDefaults(defineProps<Props>(), {
   height: 450,
 })
 
-const SEGMENT_DURATION = 20
-// MSE codec 字符串与 Worker 端转码参数(libx264 + aac)强耦合,改一侧必须改另一侧。
-const CODECS = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"'
-
-const videoRef = ref<HTMLVideoElement | null>(null)
+const canvasRef = ref<HTMLCanvasElement | null>(null)
+const audioRef = ref<HTMLAudioElement | null>(null)
+const playerContainerRef = ref<HTMLDivElement | null>(null)
 const status = ref<'loading' | 'playing' | 'error'>('loading')
 const error = ref<string | null>(null)
 
-const isPlaying = ref(false)
-const isEnded = ref(false)
-const currentTime = ref(0)
-const duration = ref(props.duration)
 const volume = ref(1)
+const controlsVisible = ref(false)
+const volumeMuted = ref(false)
+let hideControlsTimer = -1
 
-const { transcodeSegmentBySrc, loadFFmpeg } = useFFmpeg()
-
-const pipeline = useMediaSourcePipeline({
-  codecs: CODECS,
-  totalDuration: props.duration,
+const {
+  isPlaying,
+  currentTime,
+  duration,
+  isEnded,
+  play,
+  pause,
+  seek,
+  setVolume,
+  destroy,
+} = useMediabunnyPlayer({
+  src: props.src,
+  canvasRef,
+  audioRef,
+  autoplay: props.autoplay,
+  volume: volume.value,
   onError: (err) => {
+    console.error('Playback error:', err)
     error.value = err.message
     status.value = 'error'
   },
-})
-
-const scheduler = useSegmentScheduler({
-  src: props.src,
-  totalDuration: props.duration,
-  segmentDuration: SEGMENT_DURATION,
-  transcode: transcodeSegmentBySrc,
-  onSegmentReady: (seg) => pipeline.enqueue(seg),
-  onAllComplete: () => pipeline.endOfStream(),
-  onFatal: (err) => {
-    error.value = err.message
-    status.value = 'error'
+  onLoadedMetadata: (meta) => {
+    console.log('Loaded metadata:', meta)
+    status.value = 'playing'
   },
 })
 
 const togglePlay = async () => {
-  if (!videoRef.value) return
   if (isEnded.value) {
-    videoRef.value.currentTime = 0
-    isEnded.value = false
+    await seek(0)
   }
   if (isPlaying.value) {
-    videoRef.value.pause()
+    pause()
   } else {
     try {
-      await videoRef.value.play()
+      await play()
     } catch (err) {
       console.error('Playback error:', err)
     }
@@ -80,108 +73,130 @@ const togglePlay = async () => {
 }
 
 const handleSeek = (time: number) => {
-  if (!videoRef.value) return
-  videoRef.value.currentTime = time
-  currentTime.value = time
-  if (isEnded.value && time < duration.value) isEnded.value = false
+  void seek(time)
 }
 
 const handleVolumeChange = (vol: number) => {
   volume.value = vol
-  if (videoRef.value) videoRef.value.volume = vol
+  setVolume(vol)
 }
 
-const handleLoadedMetadata = () => {
-  if (!videoRef.value) return
-  const d = videoRef.value.duration
-  // MSE 下 endOfStream 前 video.duration 为 Infinity,此时沿用 props.duration(从 probe 拿到的总时长)
-  if (Number.isFinite(d) && d > 0) duration.value = d
+const showControlsTemporarily = () => {
+  controlsVisible.value = true
+  clearTimeout(hideControlsTimer)
+  hideControlsTimer = window.setTimeout(() => {
+    controlsVisible.value = false
+  }, 2000)
 }
 
-const handleTimeUpdate = () => {
-  if (!videoRef.value) return
-  currentTime.value = videoRef.value.currentTime
+const hideControlsNow = () => {
+  controlsVisible.value = false
+  clearTimeout(hideControlsTimer)
+}
 
-  // 计算当前 buffer 尾端,驱动 scheduler 预取
-  const buffered = videoRef.value.buffered
-  const bufferedEnd = buffered.length > 0 ? buffered.end(buffered.length - 1) : 0
-  scheduler.onTimeUpdate(videoRef.value.currentTime, bufferedEnd)
+const isTouchDevice = () => 'ontouchstart' in window
 
-  // 淘汰 currentTime 之前的旧 buffer,保留一段长度的容忍回退区
-  if (videoRef.value.currentTime > SEGMENT_DURATION * 2) {
-    pipeline.removeBefore(videoRef.value.currentTime - SEGMENT_DURATION)
+const onContainerPointerMove = (e: PointerEvent) => {
+  if (e.pointerType !== 'touch') showControlsTemporarily()
+}
+
+const onContainerPointerLeave = (e: PointerEvent) => {
+  if (e.pointerType === 'touch') return
+  hideControlsNow()
+}
+
+const onContainerClick = () => {
+  if (isTouchDevice()) {
+    controlsVisible.value ? hideControlsNow() : showControlsTemporarily()
+  } else {
+    togglePlay()
   }
 }
 
-const handleCanPlay = () => {
-  if (status.value === 'loading') {
-    status.value = 'playing'
-    if (props.autoplay && videoRef.value) {
-      videoRef.value.play().catch((err) => console.warn('Autoplay failed:', err))
-    }
+const onControlsClick = () => {
+  showControlsTemporarily()
+}
+
+const handleToggleMute = () => {
+  volumeMuted.value = !volumeMuted.value
+  setVolume(volumeMuted.value ? 0 : volume.value)
+}
+
+const toggleFullscreen = () => {
+  if (document.fullscreenElement) {
+    document.exitFullscreen()
+  } else {
+    playerContainerRef.value?.requestFullscreen().catch(console.error)
   }
 }
 
-const handleEnded = () => {
-  isEnded.value = true
-  isPlaying.value = false
-}
-
-onMounted(async () => {
-  if (!videoRef.value) return
-  pipeline.attach(videoRef.value)
-  try {
-    await loadFFmpeg()
-  } catch (err) {
-    error.value = (err as Error).message
-    status.value = 'error'
-    return
+const onKeyDown = (e: KeyboardEvent) => {
+  if (status.value !== 'playing') return
+  switch (e.code) {
+    case 'Space':
+    case 'KeyK':
+      togglePlay()
+      break
+    case 'KeyF':
+      toggleFullscreen()
+      break
+    case 'ArrowLeft':
+      handleSeek(Math.max(0, currentTime.value - 5))
+      break
+    case 'ArrowRight':
+      handleSeek(Math.min(duration.value, currentTime.value + 5))
+      break
+    case 'KeyM':
+      handleToggleMute()
+      break
+    default:
+      return
   }
-  scheduler.start()
-})
+  showControlsTemporarily()
+  e.preventDefault()
+}
 
 onBeforeUnmount(() => {
-  scheduler.cancel()
-  pipeline.destroy()
+  destroy()
+  window.removeEventListener('keydown', onKeyDown)
+  clearTimeout(hideControlsTimer)
 })
+
+// 挂载键盘监听
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', onKeyDown)
+}
 </script>
 
 <template>
   <div class="wasm-player-streaming">
     <div v-if="status === 'loading'" class="wasm-player-loading">
       <div class="wasm-player-spinner"></div>
-      <p>正在转码第 {{ Math.floor(scheduler.progress.value * scheduler.totalSegments) }} / {{ scheduler.totalSegments }} 段...</p>
-      <div class="wasm-player-progress-bar">
-        <div class="wasm-player-progress-fill" :style="{ width: `${scheduler.progress.value * 100}%` }"></div>
-      </div>
+      <p>正在加载视频...</p>
     </div>
 
     <div v-else-if="status === 'error'" class="wasm-player-error">
       <p>加载失败: {{ error }}</p>
     </div>
 
-    <div v-show="status === 'playing'" class="wasm-player-video-container">
-      <div
-        v-if="scheduler.failedSegments.value.length > 0"
-        class="wasm-player-warning"
-      >
-        第 {{ scheduler.failedSegments.value.map((i) => i + 1).join('、') }} 段加载失败,可能有短暂黑屏或静音
-      </div>
+    <div
+      v-show="status === 'playing'"
+      ref="playerContainerRef"
+      class="wasm-player-video-container"
+      :style="{ width: width + 'px', height: height + 'px' }"
+      @pointermove="onContainerPointerMove"
+      @pointerleave="onContainerPointerLeave"
+      @click="onContainerClick"
+    >
       <div class="wasm-player-video-wrapper" :style="{ height: height + 'px' }">
-        <video
-          ref="videoRef"
-          @timeupdate="handleTimeUpdate"
-          @loadedmetadata="handleLoadedMetadata"
-          @canplay="handleCanPlay"
-          @play="isPlaying = true"
-          @pause="isPlaying = false"
-          @ended="handleEnded"
-        ></video>
+        <canvas ref="canvasRef" :width="width" :height="height"></canvas>
+        <!-- 隐藏的 audio 元素，用于 Safari 回退 -->
+        <audio ref="audioRef" style="display: none"></audio>
         <img
           v-if="poster && !isPlaying"
           :src="poster"
           class="wasm-player-poster-overlay"
-          @click="togglePlay"
+          @click.stop="togglePlay"
         />
       </div>
 
@@ -191,10 +206,83 @@ onBeforeUnmount(() => {
         :current-time="currentTime"
         :duration="duration"
         :volume="volume"
+        :controls-visible="controlsVisible"
         @toggle-play="togglePlay"
         @seek="handleSeek"
         @volume-change="handleVolumeChange"
+        @toggle-mute="handleToggleMute"
+        @toggle-fullscreen="toggleFullscreen"
+        @controls-click="onControlsClick"
       />
     </div>
   </div>
 </template>
+
+<style scoped>
+.wasm-player-streaming {
+  position: relative;
+  background: #000;
+}
+
+.wasm-player-loading,
+.wasm-player-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: #fff;
+  padding: 2rem;
+}
+
+.wasm-player-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.wasm-player-video-container {
+  position: relative;
+  background: #000;
+  overflow: hidden;
+}
+
+.wasm-player-video-wrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.wasm-player-poster-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+}
+
+.wasm-player-error p {
+  color: #ff6b6b;
+  font-size: 14px;
+}
+</style>

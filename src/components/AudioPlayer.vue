@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 纯渲染音频播放器：与 VideoPlayer 对称，只接受已可播的 src，不做格式判断。
 // <audio> 元素被隐藏（display:none），UI 完全自绘，以便统一项目内的外观风格。
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import PlayerControls from './PlayerControls.vue'
 
 interface Props {
@@ -20,6 +20,7 @@ const currentTime = ref(0)
 const duration = ref(0)
 const volume = ref(1)
 const error = ref<string | null>(null)
+const volumeMuted = ref(false)
 
 const togglePlay = async () => {
   if (!audioRef.value) return
@@ -88,6 +89,25 @@ const handleVolumeChange = (vol: number) => {
   }
 }
 
+const handleToggleMute = () => {
+  volumeMuted.value = !volumeMuted.value
+  if (audioRef.value) {
+    audioRef.value.volume = volumeMuted.value ? 0 : volume.value
+  }
+}
+
+const onKeyDown = (e: KeyboardEvent) => {
+  if (error.value) return
+  switch (e.code) {
+    case 'Space': case 'KeyK': togglePlay(); break
+    case 'ArrowLeft': handleSeek(Math.max(0, currentTime.value - 5)); break
+    case 'ArrowRight': handleSeek(Math.min(duration.value, currentTime.value + 5)); break
+    case 'KeyM': handleToggleMute(); break
+    default: return
+  }
+  e.preventDefault()
+}
+
 // 每次 src 变化都手动重置播放状态：不依赖 <audio> 元素的内部状态重置，
 // 避免上一次播放的 currentTime/isPlaying 残留到新 src 的 UI 上。
 const loadAudio = async () => {
@@ -117,6 +137,11 @@ watch(() => props.src, () => {
 
 onMounted(() => {
   if (props.src) loadAudio()
+  window.addEventListener('keydown', onKeyDown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeyDown)
 })
 </script>
 
@@ -141,9 +166,12 @@ onMounted(() => {
       :current-time="currentTime"
       :duration="duration"
       :volume="volume"
+      :controls-visible="true"
+      :show-fullscreen="false"
       @toggle-play="togglePlay"
       @seek="handleSeek"
       @volume-change="handleVolumeChange"
+      @toggle-mute="handleToggleMute"
     />
   </div>
 </template>

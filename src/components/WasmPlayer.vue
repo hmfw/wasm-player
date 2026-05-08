@@ -6,9 +6,8 @@ import { ref, watch } from 'vue'
 import VideoPlayer from './VideoPlayer.vue'
 import AudioPlayer from './AudioPlayer.vue'
 import StreamingPlayer from './StreamingPlayer.vue'
-import { useFFmpeg } from '../composables/useFFmpeg'
 import { detectMediaType } from '../shared/mediaProbe'
-import { resolveCodecPlayback, fallbackMediaProbe, lightProbeMP4 } from '../shared'
+import { resolveCodecPlayback, fallbackMediaProbe, probeMediaBySrc } from '../shared'
 import type { PlaybackDecision, ProbeResult } from '../shared'
 
 interface Props {
@@ -35,15 +34,8 @@ const probeResult = ref<ProbeResult | null>(null)
 const decision = ref<PlaybackDecision | null>(null)
 const error = ref<string | null>(null)
 
-const { loadFFmpeg, probeMediaBySrc, terminate } = useFFmpeg()
-
-// 切换 src 时清理上一次的状态。
-// 如果正在转码，立即销毁 Worker 以真正停止 FFmpeg 执行并释放所有资源（CPU、内存、临时文件）。
-// 下次需要 FFmpeg 时会自动重新创建 Worker 并加载 WASM（约 1-3 秒）。
+// 切换 src 时清理上一次的状态
 const reset = () => {
-  if (status.value === 'probing' || routeTarget.value === 'stream-video') {
-    terminate()
-  }
   status.value = 'idle'
   routeTarget.value = null
   playbackUrl.value = ''
@@ -83,19 +75,13 @@ const process = async (src: string) => {
 
   status.value = 'probing'
 
-  // 第二步 probe：先尝试轻量级 MP4 二进制解析（无需加载 WASM）。
-  // 成功则直接用结果；失败（非 faststart MP4、MKV、FLV 等）才启动 FFmpeg。
+  // probe：用 mediabunny Input 在主线程直接解析，无需 Worker 往返。
+  // 失败（非 MP4 或网络错误）则按扩展名兜底。
   let probe: ProbeResult
-  const lightResult = await lightProbeMP4(src)
-  if (lightResult) {
-    probe = lightResult
-  } else {
-    try {
-      await loadFFmpeg()
-      probe = await probeMediaBySrc(src)
-    } catch (err) {
-      probe = fallbackMediaProbe(src)
-    }
+  try {
+    probe = await probeMediaBySrc(src)
+  } catch {
+    probe = fallbackMediaProbe(src)
   }
   probeResult.value = probe
 
@@ -159,7 +145,6 @@ watch(() => props.src, (src) => {
         v-else-if="routeTarget === 'stream-video'"
         :key="src"
         :src="src"
-        :duration="probeResult?.duration || 0"
         :autoplay="autoplay"
         :width="width"
         :height="height"
