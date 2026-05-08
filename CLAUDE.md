@@ -13,7 +13,8 @@ src/
 │   ├── AudioPlayer.vue           # 原生音频渲染，纯展示
 │   └── PlayerControls.vue        # 公共控件（播放/暂停/进度/音量），props in / emits out
 ├── composables/
-│   └── useMediabunnyPlayer.ts    # mediabunny 播放器核心：Input + CanvasSink + RAF 循环 + 时间管理
+│   ├── useMediabunnyPlayer.ts    # mediabunny 播放器核心：Input + CanvasSink + RAF 循环 + 时间管理
+│   └── extractAudioToNative.ts   # 音频提取工具：将音频轨道封装为 ADTS blob URL 供 <audio> 播放
 ├── shared/
 │   ├── types.ts                  # ProbeResult / PlaybackDecision / PlaybackMode / MediaType
 │   ├── index.ts                  # resolveCodecPlayback()（播放决策入口，re-export 所有 shared）
@@ -30,9 +31,9 @@ src/
 | 修改播放决策逻辑（哪种 codec 走哪条路） | `src/shared/playbackDecision.ts` → `decidePlayback()` 和 `src/shared/index.ts` → `resolveCodecPlayback()` |
 | 新增支持的格式 | `src/shared/index.ts` → `resolveCodecPlayback()` 加 codec 分支；复杂逻辑在 `src/shared/` 新建文件 |
 | 修改 probe 策略（如何识别媒体类型） | `src/shared/probeMedia.ts`（主线程 MP4 probe）、`src/shared/probeFallback.ts`（兜底）、`src/shared/mediaProbe.ts`（扩展名快判） |
-| 修改 H.265 播放器渲染逻辑 | `src/composables/useMediabunnyPlayer.ts`（RAF 循环、时间管理、seeking） |
+| 修改 H.265 播放器渲染逻辑 | `src/composables/useMediabunnyPlayer.ts`（RAF 循环、时间管理、seeking）；音频提取逻辑在 `src/composables/extractAudioToNative.ts` |
 | 修改播放器 UI / 控件 | `src/components/PlayerControls.vue`（公共控件）；各播放器组件负责自己的布局 |
-| 添加单元测试 | `src/shared/shared.test.ts`（播放决策逻辑）、`src/composables/useMediabunnyPlayer.test.ts`（播放器逻辑） |
+| 添加单元测试 | `src/shared/shared.test.ts`（播放决策逻辑）、`src/composables/useMediabunnyPlayer.test.ts`（播放器逻辑）、`src/composables/extractAudioToNative.ts`（纯函数，可直接单测） |
 
 ## 常用命令
 
@@ -83,7 +84,8 @@ useMediabunnyPlayer
 - **自动解码管线**：mediabunny 内置 VideoDecoder 队列管理、B-frame 排序、RASL 帧跳过
 - **智能预取**：LRU 缓存 + 网络优化预取策略
 - **Canvas 池复用**：零拷贝，减少内存分配
-- **时间同步**：使用 `performance.now()` 作为时钟源，asyncId 机制防止 seek 竞态
+- **时间同步**：播放中以 `audioRef.currentTime` 为时钟源，asyncId 机制防止 seek 竞态
+- **音频提取**：`extractAudioToNative` 将音频轨道重封装为 ADTS blob，挂载到原生 `<audio>` 元素
 - **浏览器兼容**：内置 Safari/Chrome 兼容性修复
 
 ## 组件 Props

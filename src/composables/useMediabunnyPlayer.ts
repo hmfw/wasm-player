@@ -1,10 +1,14 @@
 import { ref, watch, onUnmounted, type Ref } from 'vue'
 import {
   Input, UrlSource, CanvasSink, ALL_FORMATS,
-  Output, AdtsOutputFormat, BufferTarget,
-  EncodedPacketSink, EncodedAudioPacketSource,
-  InputAudioTrack,
 } from 'mediabunny'
+import { extractAudioToNative, applyAudioToElement } from './extractAudioToNative'
+
+type WrappedCanvas = {
+  canvas: HTMLCanvasElement | OffscreenCanvas
+  timestamp: number
+  duration: number
+}
 
 interface UseMediabunnyPlayerOptions {
   src: string
@@ -41,116 +45,79 @@ export function useMediabunnyPlayer(
   const hasAudio = ref(false)
 
   let videoSink: CanvasSink | null = null
-  let videoFrameIterator: AsyncGenerator<any, void, unknown> | null = null
-  let nextFrame: any = null
+  let videoFrameIterator: AsyncGenerator<WrappedCanvas, void, unknown> | null = null
+  let nextFrame: WrappedCanvas | null = null
   let context: CanvasRenderingContext2D | null = null
+  // mediabunny 时间戳单位为秒，firstTimestamp 通常为 0，但部分容器（如 MKV）首帧不从 0 开始
   let firstTimestamp = 0
   let endTimestamp = 0
+  // 暂停或 seek 后记录恢复点；播放中时间源切换为 audioRef.currentTime
   let playbackTimeAtStart = 0
   let rafId = -1
+  // 每次 startVideoIterator 递增，用于检测 seek 竞态：异步帧到达时若 asyncId 已变则丢弃
   let asyncId = 0
   let audioBlobUrl: string | null = null
 
-  const extractAudioToNative = async (audioEl: HTMLAudioElement, vol: number, audioTrack: InputAudioTrack) => {
-    const audioCodec = await audioTrack.getCodec()
-    if (!audioCodec) return
+  const setupCanvas = () => {
+    if (!canvasRef.value) throw new Error('Canvas ref is null')
+    context = canvasRef.value.getContext('2d')
+    if (!context) throw new Error('Failed to get 2D context')
+  }
 
-    const audioSource = new EncodedAudioPacketSource(audioCodec)
-    const audioOutput = new Output({
-      format: new AdtsOutputFormat(),
-      target: new BufferTarget(),
-    })
-    audioOutput.addAudioTrack(audioSource)
-    await audioOutput.start()
+  const setupInput = async () => {
+    const input = new Input({ source: new UrlSource(src), formats: ALL_FORMATS })
+    const videoTrack = await input.getPrimaryVideoTrack()
+    const audioTrack = await input.getPrimaryAudioTrack()
 
-    const decoderConfig = await audioTrack.getDecoderConfig()
-    const sink = new EncodedPacketSink(audioTrack)
-    let isFirst = true
-    for await (const packet of sink.packets()) {
-      if (packet.timestamp < 0) continue
-      const meta = isFirst && decoderConfig ? { decoderConfig } : undefined
-      await audioSource.add(packet, meta)
-      isFirst = false
-    }
-    await audioOutput.finalize()
+    if (!videoTrack) throw new Error('No video track found')
+    const codec = await videoTrack.getCodec()
+    if (!codec) throw new Error('Unsupported video codec')
+    const canDecode = await videoTrack.canDecode()
+    if (!canDecode) throw new Error(`Unable to decode video codec: ${codec}`)
 
-    const buffer = (audioOutput.target as BufferTarget).buffer
-    if (!buffer) return
-    const mimeType = await audioOutput.getMimeType()
-    const blob = new Blob([buffer], { type: mimeType })
-    audioBlobUrl = URL.createObjectURL(blob)
-    hasAudio.value = true
-    audioEl.src = audioBlobUrl
-    audioEl.volume = vol
+    const tracks = [videoTrack, audioTrack].filter((t) => t !== null)
+    firstTimestamp = Math.max(await input.getFirstTimestamp(tracks), 0)
+    // 优先从元数据读取时长，避免扫描整个文件；元数据缺失时才 computeDuration（会读到 EOF）
+    endTimestamp =
+      (await input.getDurationFromMetadata(tracks, { skipLiveWait: true })) ??
+      (await input.computeDuration(tracks, { skipLiveWait: true }))
+
+    playbackTimeAtStart = firstTimestamp
+    duration.value = endTimestamp - firstTimestamp
+
+    const width = await videoTrack.getDisplayWidth()
+    const height = await videoTrack.getDisplayHeight()
+    canvasRef.value!.width = width
+    canvasRef.value!.height = height
+
+    return { videoTrack, audioTrack, width, height }
+  }
+
+  const setupVideoSink = async (videoTrack: Awaited<ReturnType<typeof setupInput>>['videoTrack']) => {
+    const canBeTransparent = await videoTrack.canBeTransparent()
+    videoSink = new CanvasSink(videoTrack, { poolSize: 2, fit: 'contain', alpha: canBeTransparent })
   }
 
   const init = async () => {
     try {
-      if (!canvasRef.value) {
-        throw new Error('Canvas ref is null')
-      }
-
-      context = canvasRef.value.getContext('2d')
-      if (!context) {
-        throw new Error('Failed to get 2D context')
-      }
-
-      const input = new Input({
-        source: new UrlSource(src),
-        formats: ALL_FORMATS,
-      })
-
-      const videoTrack = await input.getPrimaryVideoTrack()
-      const audioTrack = await input.getPrimaryAudioTrack()
-
-      if (!videoTrack) {
-        throw new Error('No video track found')
-      }
-
-      const codec = await videoTrack.getCodec()
-      if (!codec) {
-        throw new Error('Unsupported video codec')
-      }
-
-      const canDecode = await videoTrack.canDecode()
-      if (!canDecode) {
-        throw new Error(`Unable to decode video codec: ${codec}`)
-      }
-
-      const tracks = [videoTrack, audioTrack].filter((t) => t !== null)
-      firstTimestamp = Math.max(await input.getFirstTimestamp(tracks), 0)
-      endTimestamp =
-        (await input.getDurationFromMetadata(tracks, { skipLiveWait: true })) ??
-        (await input.computeDuration(tracks, { skipLiveWait: true }))
-
-      playbackTimeAtStart = firstTimestamp
-      duration.value = endTimestamp - firstTimestamp
-
-      const width = await videoTrack.getDisplayWidth()
-      const height = await videoTrack.getDisplayHeight()
-
-      canvasRef.value.width = width
-      canvasRef.value.height = height
-
-      const canBeTransparent = await videoTrack.canBeTransparent()
-      videoSink = new CanvasSink(videoTrack, {
-        poolSize: 2,
-        fit: 'contain',
-        alpha: canBeTransparent,
-      })
+      setupCanvas()
+      const { videoTrack, audioTrack, width, height } = await setupInput()
+      await setupVideoSink(videoTrack)
 
       if (audioTrack) {
         if (!audioRef?.value) throw new Error('audioRef is required when the media has an audio track')
-        await extractAudioToNative(audioRef.value, volume, audioTrack)
+        const result = await extractAudioToNative(audioTrack)
+        if (result) {
+          audioBlobUrl = result.blobUrl
+          hasAudio.value = true
+          applyAudioToElement(audioRef.value, result.blobUrl, volume)
+        }
       }
 
       onLoadedMetadata?.({ duration: duration.value, width, height })
-
       await startVideoIterator()
 
-      if (autoplay) {
-        await play()
-      }
+      if (autoplay) await play()
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err))
       onError?.(error)
@@ -164,13 +131,16 @@ export function useMediabunnyPlayer(
     asyncId++
     const currentAsyncId = asyncId
 
+    // 终止旧迭代器，释放 mediabunny 内部解码队列
     await videoFrameIterator?.return()
 
     videoFrameIterator = videoSink.canvases(getPlaybackTime())
 
+    // 预取两帧：第一帧立即绘制作为静止预览，第二帧存入 nextFrame 供 render 使用
     const firstFrame = (await videoFrameIterator.next()).value ?? null
     const secondFrame = (await videoFrameIterator.next()).value ?? null
 
+    // seek 竞态检测：若在等待期间又触发了新的 startVideoIterator，则丢弃本次结果
     if (currentAsyncId !== asyncId) return
 
     nextFrame = secondFrame
@@ -182,6 +152,7 @@ export function useMediabunnyPlayer(
   }
 
   const getPlaybackTime = (): number => {
+    // 播放中以音频时钟为准，保证音视频同步；暂停/seek 时用 playbackTimeAtStart 作为静止时间点
     if (isPlaying.value && audioRef?.value && hasAudio.value) {
       return audioRef.value.currentTime
     }
@@ -190,6 +161,7 @@ export function useMediabunnyPlayer(
 
   const updateNextFrame = async () => {
     const currentAsyncId = asyncId
+    let lastBehindFrame: WrappedCanvas | null = null
 
     while (true) {
       if (!videoFrameIterator) break
@@ -201,14 +173,18 @@ export function useMediabunnyPlayer(
 
       const playbackTime = getPlaybackTime()
       if (newNextFrame.timestamp <= playbackTime) {
-        if (context && canvasRef.value) {
-          context.clearRect(0, 0, canvasRef.value.width, canvasRef.value.height)
-          context.drawImage(newNextFrame.canvas, 0, 0)
-        }
+        // 帧落后于播放时间：继续追帧，不绘制中间帧
+        lastBehindFrame = newNextFrame
       } else {
         nextFrame = newNextFrame
         break
       }
+    }
+
+    // 所有帧都落后时（如 seek 后快速播放），只绘制最新的一帧
+    if (lastBehindFrame && context && canvasRef.value) {
+      context.clearRect(0, 0, canvasRef.value.width, canvasRef.value.height)
+      context.drawImage(lastBehindFrame.canvas, 0, 0)
     }
   }
 
