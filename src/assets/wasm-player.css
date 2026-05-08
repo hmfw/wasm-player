@@ -107,6 +107,7 @@
 
 .wasm-player-video-wrapper {
   position: relative;
+  border-radius: 0.75rem;
   background: #000;
 }
 

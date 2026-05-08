@@ -221,7 +221,7 @@ if (typeof window !== 'undefined') {
 <style scoped>
 .wasm-player-streaming {
   position: relative;
-  background: #000;
+  /* background: #000; */
 }
 
 .wasm-player-loading,
