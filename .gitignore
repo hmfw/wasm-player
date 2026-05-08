@@ -6,6 +6,7 @@ dist-ssr
 .vscode
 .idea
 *.log
+.playwright-cli
 
 # Test videos (except README)
 public/videos/*.mp4

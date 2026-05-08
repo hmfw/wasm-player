@@ -154,6 +154,39 @@
 
 .wasm-player-streaming {
   margin: 0 auto;
+  position: relative;
+}
+
+.wasm-player-streaming canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.wasm-player-video-container:fullscreen,
+.wasm-player-video-container:-webkit-full-screen {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0;
+}
+
+.wasm-player-video-container:fullscreen .wasm-player-video-wrapper,
+.wasm-player-video-container:-webkit-full-screen .wasm-player-video-wrapper {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.wasm-player-video-container:fullscreen canvas,
+.wasm-player-video-container:-webkit-full-screen canvas {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain;
+}
+
+.wasm-player-streaming .wasm-player-error p {
+  color: #ff6b6b;
+  font-size: 14px;
 }
 
 .wasm-player-streaming video {

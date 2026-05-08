@@ -121,7 +121,7 @@ const toggleMute = () => {
   <div
     class="wasm-player-controls"
     :class="{ 'wasm-player-controls--visible': controlsVisible }"
-    @click="emit('controls-click')"
+    @click.stop="emit('controls-click')"
   >
     <button class="wasm-player-control-btn" :aria-label="isPlaying ? '暂停' : '播放'" @click.stop="emit('toggle-play')">
       <div class="wasm-player-icon-wrapper">
@@ -143,9 +143,9 @@ const toggleMute = () => {
       <div
         ref="volumeBarRef"
         class="wasm-player-volume-bar-container wasm-player-bar-group"
-        @pointerdown="onVolumePointerDown"
-        @pointermove="onVolumePointerMove"
-        @pointerup="onVolumePointerUp"
+        @pointerdown.stop="onVolumePointerDown"
+        @pointermove.stop="onVolumePointerMove"
+        @pointerup.stop="onVolumePointerUp"
       >
         <div class="wasm-player-bar-fill" :style="{ width: volumePercent + '%' }">
           <div class="wasm-player-bar-handle"></div>
@@ -158,9 +158,9 @@ const toggleMute = () => {
     <div
       ref="progressBarRef"
       class="wasm-player-progress-bar-container wasm-player-bar-group"
-      @pointerdown="onProgressPointerDown"
-      @pointermove="onProgressPointerMove"
-      @pointerup="onProgressPointerUp"
+      @pointerdown.stop="onProgressPointerDown"
+      @pointermove.stop="onProgressPointerMove"
+      @pointerup.stop="onProgressPointerUp"
     >
       <div class="wasm-player-bar-fill" :style="{ width: progressPercent + '%' }">
         <div class="wasm-player-bar-handle wasm-player-progress-handle"></div>
