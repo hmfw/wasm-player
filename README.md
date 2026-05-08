@@ -1,6 +1,6 @@
 # wasm-player
 
-基于 Vue 3 + TypeScript + mediabunny 的媒体播放器，支持 H.264、H.265/HEVC 视频和 MP3 等音频格式。
+基于 Vue 3 + TypeScript + mediabunny 的媒体播放器，支持 H.264、H.265/HEVC 视频和 MP3 等音频格式。可作为 npm 包发布，供其他 Vue 3 项目使用。
 
 ## 特性
 
@@ -22,6 +22,32 @@
 
 ## 快速开始
 
+### 作为 npm 包使用
+
+```bash
+npm install wasm-player
+```
+
+```typescript
+import { WasmPlayer } from 'wasm-player'
+// CSS 已自动内联，无需额外引入
+```
+
+```vue
+<template>
+  <WasmPlayer src="/videos/demo.mp4" :width="800" :height="450" />
+  <WasmPlayer src="/audio/track.mp3" />
+</template>
+
+<script setup>
+import { WasmPlayer } from 'wasm-player'
+</script>
+```
+
+> **注意：** 消费者项目需配置服务端 COOP/COEP 头，详见[服务端配置](#服务端配置)。
+
+### 本地开发
+
 ```bash
 npm install
 npm run dev      # 开发服务器 http://localhost:5173
@@ -30,6 +56,13 @@ npm run preview  # 预览生产构建
 npm run test     # 运行 vitest 单元测试
 npm run lint     # ESLint 检查
 npm run format   # Prettier 格式化 src/
+```
+
+### 构建 npm 包
+
+```bash
+npm run build:lib   # 构建到 dist/
+npm publish         # 发布（需先 npm login）
 ```
 
 ## 使用组件
@@ -172,3 +205,33 @@ mediabunny 解码能力只能在真实浏览器中回归，建议搭配 Playwrig
 ## 许可证
 
 MIT
+
+## 服务端配置
+
+本库依赖 SharedArrayBuffer（通过 mediabunny），浏览器要求页面处于 cross-origin isolated 环境。消费者项目需配置以下响应头：
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+Vite 开发服务器配置示例：
+
+```js
+// vite.config.ts
+export default defineConfig({
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
+})
+```
+
+Nginx 配置示例：
+
+```nginx
+add_header Cross-Origin-Opener-Policy "same-origin";
+add_header Cross-Origin-Embedder-Policy "require-corp";
+```
