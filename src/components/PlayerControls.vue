@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed } from 'vue'
 
 interface Props {
   isPlaying: boolean
@@ -33,7 +33,6 @@ let draggingProgress = false
 let draggingVolume = false
 
 const volumeMuted = ref(false)
-const windowWidth = ref(window.innerWidth)
 
 const progressPercent = computed(() =>
   props.duration > 0 ? (props.currentTime / props.duration) * 100 : 0
@@ -51,16 +50,12 @@ const volumeIconIndex = computed(() => {
 
 const formatTime = (seconds: number): string => {
   if (!Number.isFinite(seconds) || seconds < 0) return '--:--'
-  const showMs = windowWidth.value >= 640
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
   const s = Math.floor(seconds % 60)
-  const ms = Math.floor((seconds * 1000) % 1000).toString().padStart(3, '0')
-  let result = h > 0
+  return h > 0
     ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
     : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
-  if (showMs) result += `.${ms}`
-  return result
 }
 
 const currentTimeFormatted = computed(() => formatTime(props.currentTime))
@@ -120,16 +115,6 @@ const toggleMute = () => {
   volumeMuted.value = !volumeMuted.value
   emit('toggle-mute')
 }
-
-const onResize = () => { windowWidth.value = window.innerWidth }
-
-onMounted(() => {
-  window.addEventListener('resize', onResize)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', onResize)
-})
 </script>
 
 <template>
@@ -138,7 +123,7 @@ onBeforeUnmount(() => {
     :class="{ 'wasm-player-controls--visible': controlsVisible }"
     @click="emit('controls-click')"
   >
-    <button class="wasm-player-control-btn" @click.stop="emit('toggle-play')" :aria-label="isPlaying ? '暂停' : '播放'">
+    <button class="wasm-player-control-btn" :aria-label="isPlaying ? '暂停' : '播放'" @click.stop="emit('toggle-play')">
       <div class="wasm-player-icon-wrapper">
         <img v-show="!isPlaying" src="../assets/play-icon.svg" class="wasm-player-icon wasm-player-icon--invert" alt="播放" />
         <img v-show="isPlaying" src="../assets/pause-icon.svg" class="wasm-player-icon wasm-player-icon--invert" alt="暂停" />
@@ -146,7 +131,7 @@ onBeforeUnmount(() => {
     </button>
 
     <div class="wasm-player-volume-group">
-      <button class="wasm-player-control-btn wasm-player-volume-btn" @click.stop="toggleMute" aria-label="切换静音">
+      <button class="wasm-player-control-btn wasm-player-volume-btn" aria-label="切换静音" @click.stop="toggleMute">
         <div class="wasm-player-icon-wrapper">
           <img v-show="volumeIconIndex === 0" src="../assets/volume-off-icon.svg" class="wasm-player-icon wasm-player-icon--invert" />
           <img v-show="volumeIconIndex === 1" src="../assets/volume-x-icon.svg" class="wasm-player-icon wasm-player-icon--invert" />
@@ -184,7 +169,7 @@ onBeforeUnmount(() => {
 
     <p class="wasm-player-time wasm-player-duration">{{ durationFormatted }}</p>
 
-    <button v-if="showFullscreen" class="wasm-player-control-btn" @click.stop="emit('toggle-fullscreen')" aria-label="全屏">
+    <button v-if="showFullscreen" class="wasm-player-control-btn" aria-label="全屏" @click.stop="emit('toggle-fullscreen')">
       <div class="wasm-player-icon-wrapper">
         <img src="../assets/fullscreen-icon.svg" class="wasm-player-icon wasm-player-icon--invert" alt="全屏" />
       </div>
