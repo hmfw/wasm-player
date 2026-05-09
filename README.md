@@ -1,6 +1,6 @@
-# wasm-player
+# @mario9/wasm-player
 
-基于 Vue 3 + TypeScript + mediabunny 的媒体播放器，支持 H.264、H.265/HEVC 视频和 MP3 等音频格式。可作为 npm 包发布，供其他 Vue 3 项目使用。
+基于 Vue 3 + TypeScript + mediabunny 的媒体播放器，支持 H.264、H.265/HEVC 视频和 MP3 等音频格式。
 
 ## 特性
 
@@ -20,18 +20,13 @@
 - **mediabunny** — 纯 TypeScript 媒体处理库（MP4 demux + WebCodecs 解码管线）
 - **WebCodecs API** — 浏览器原生硬件加速编解码
 
-## 快速开始
-
-### 作为 npm 包使用
+## 安装
 
 ```bash
-npm install wasm-player
+npm install @mario9/wasm-player
 ```
 
-```typescript
-import { WasmPlayer } from 'wasm-player'
-// CSS 已自动内联，无需额外引入
-```
+## 快速开始
 
 ```vue
 <template>
@@ -40,37 +35,22 @@ import { WasmPlayer } from 'wasm-player'
 </template>
 
 <script setup>
-import { WasmPlayer } from 'wasm-player'
+import { WasmPlayer } from '@mario9/wasm-player'
+import '@mario9/wasm-player/dist/player.css'
 </script>
 ```
 
 > **注意：** 消费者项目需配置服务端 COOP/COEP 头，详见[服务端配置](#服务端配置)。
 
-### 本地开发
-
-```bash
-npm install
-npm run dev      # 开发服务器 http://localhost:5173
-npm run build    # 类型检查 + 生产构建
-npm run preview  # 预览生产构建
-npm run test     # 运行 vitest 单元测试
-npm run lint     # ESLint 检查
-npm run format   # Prettier 格式化 src/
-```
-
-### 构建 npm 包
-
-```bash
-npm run build:lib   # 构建到 dist/
-npm publish         # 发布（需先 npm login）
-```
-
 ## 使用组件
 
-推荐直接使用 `WasmPlayer`，它会自动识别格式并路由到视频或音频播放器：
+推荐直接使用 `WasmPlayer`，它会自动识别格式并路由到对应播放器：
 
 ```vue
+<!-- 视频（自动识别 H.264 / H.265） -->
 <WasmPlayer src="/videos/demo.mp4" :width="800" :height="450" />
+
+<!-- 音频 -->
 <WasmPlayer src="/audio/track.mp3" />
 ```
 
@@ -78,6 +58,7 @@ npm publish         # 发布（需先 npm login）
 
 ```vue
 <VideoPlayer src="/videos/h264.mp4" />
+<StreamingPlayer src="/videos/h265.mp4" />
 <AudioPlayer src="/audio/track.mp3" />
 ```
 
@@ -85,51 +66,49 @@ npm publish         # 发布（需先 npm login）
 
 | Prop | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `src` | `string` | 必填 | 媒体 URL |
+| `src` | `string` | 必填 | 媒体 URL（支持 http/https/blob/data） |
 | `autoplay` | `boolean` | `false` | 自动播放 |
 | `width` | `number` | `800` | 宽度（px） |
 | `height` | `number` | `450` | 高度（px，仅视频） |
-| `poster` | `string` | — | 封面图（仅视频） |
+| `poster` | `string` | — | 封面图 URL（仅视频） |
 
-### VideoPlayer Props
+### VideoPlayer / StreamingPlayer Props
 
-| Prop | 类型 | 默认值 |
-|------|------|--------|
-| `src` | `string` | 必填 |
-| `autoplay` | `boolean` | `false` |
-| `width` | `number` | `800` |
-| `height` | `number` | `450` |
-| `poster` | `string` | — |
+| Prop | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `src` | `string` | 必填 | 视频 URL |
+| `autoplay` | `boolean` | `false` | 自动播放 |
+| `width` | `number` | `800` | 宽度（px） |
+| `height` | `number` | `450` | 高度（px） |
+| `poster` | `string` | — | 封面图 URL |
 
 ### AudioPlayer Props
 
-| Prop | 类型 | 默认值 |
-|------|------|--------|
-| `src` | `string` | 必填 |
-| `autoplay` | `boolean` | `false` |
+| Prop | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `src` | `string` | 必填 | 音频 URL |
+| `autoplay` | `boolean` | `false` | 自动播放 |
 
 ## 工作原理
 
 ```
-App.vue（选择 src）
-  → WasmPlayer.vue（智能路由）
-      → detectMediaType()        扩展名快判（音频直接路由）
-      → probeMediaBySrc()        mediabunny Input 主线程 probe
-      → resolveCodecPlayback()   按 codec feature 决策
-          h264  → VideoPlayer.vue（<video> 原生播放）
-          h265  → StreamingPlayer.vue（Canvas 渲染）
-          audio → AudioPlayer.vue（<audio> 原生播放）
+WasmPlayer.vue（智能路由）
+  → detectMediaType()        扩展名快判（音频直接路由）
+  → probeMediaBySrc()        mediabunny Input 主线程 probe
+  → resolveCodecPlayback()   按 codec feature 决策
+      h264  → VideoPlayer.vue（<video> 原生播放）
+      h265  → StreamingPlayer.vue（Canvas 渲染）
+      audio → AudioPlayer.vue（<audio> 原生播放）
 ```
 
 **H.265/HEVC 播放流程**：
 
 ```
 StreamingPlayer.vue
-  ↓ props: src（duration 由 Input 自动获取）
-useMediabunnyPlayer
+  ↓ useMediabunnyPlayer
   ↓ Input + UrlSource（获取视频轨道）
   ↓ CanvasSink（poolSize: 2, fit: 'contain'）
-  ↓ 迭代器模式：for await (const { canvas, timestamp } of videoSink.canvases())
+  ↓ for await (const { canvas, timestamp } of videoSink.canvases())
   ↓ RAF 循环：检查 nextFrame.timestamp <= currentTime，绘制到 Canvas
 <canvas> 渲染
 ```
@@ -158,9 +137,23 @@ if (result.videoCodec === 'vp9') {
 
 WebCodecs API 要求：
 
-- Chrome / Edge 94+
-- Safari 16.4+
-- Firefox 不支持 H.264/HEVC 编码（WebCodecs 部分实现）
+| 浏览器 | 最低版本 |
+|--------|---------|
+| Chrome / Edge | 94+ |
+| Safari | 16.4+ |
+| Firefox | 不支持 H.264/HEVC（WebCodecs 部分实现） |
+
+## 本地开发
+
+```bash
+npm install
+npm run dev        # 开发服务器 http://localhost:5173
+npm run build      # 类型检查 + 生产构建
+npm run build:lib  # 构建 npm 包到 dist/
+npm run test       # 运行 vitest 单元测试
+npm run lint       # ESLint 检查
+npm run format     # Prettier 格式化 src/
+```
 
 ## 测试
 
@@ -168,15 +161,7 @@ WebCodecs API 要求：
 npm run test
 ```
 
-覆盖范围：
-
-- `src/shared/` 的决策函数与兜底逻辑
-
-mediabunny 解码能力只能在真实浏览器中回归，建议搭配 Playwright 做冒烟测试（尚未配置）。
-
-## 许可证
-
-MIT
+覆盖范围：`src/shared/` 的决策函数与兜底逻辑。mediabunny 解码能力只能在真实浏览器中回归，建议搭配 Playwright 做冒烟测试。
 
 ## 服务端配置
 
@@ -207,3 +192,7 @@ Nginx 配置示例：
 add_header Cross-Origin-Opener-Policy "same-origin";
 add_header Cross-Origin-Embedder-Policy "require-corp";
 ```
+
+## 许可证
+
+MIT

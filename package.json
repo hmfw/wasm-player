@@ -1,7 +1,6 @@
 {
-  "name": "wasm-player",
-  "private": false,
-  "version": "0.1.0",
+  "name": "@mario9/wasm-player",
+  "version": "0.1.1",
   "type": "module",
   "description": "Vue 3 media player with WebCodecs/H.265 support via mediabunny",
   "main": "./dist/index.js",
@@ -13,6 +12,15 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hmfw/wasm-player.git"
+  },
+  "homepage": "https://github.com/hmfw/wasm-player#readme",
+  "bugs": {
+    "url": "https://github.com/hmfw/wasm-player/issues"
+  },
+  "license": "MIT",
   "files": [
     "dist/index.js",
     "dist/index.js.map",
@@ -33,8 +41,10 @@
     "lint": "eslint src --ext .ts,.vue",
     "format": "prettier --write \"src/**/*.{ts,vue,css}\""
   },
+  "dependencies": {
+    "mediabunny": ">=1.44.0"
+  },
   "peerDependencies": {
-    "mediabunny": ">=1.44.0",
     "vue": ">=3.4.0"
   },
   "devDependencies": {
