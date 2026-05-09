@@ -1,8 +1,23 @@
 {
   "name": "@mario9/wasm-player",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
-  "description": "Vue 3 media player with WebCodecs/H.265 support via mediabunny",
+  "description": "基于 Vue 3 + mediabunny 的媒体播放器，支持 H.264、H.265/HEVC 视频和 MP3 音频",
+  "keywords": [
+    "vue3",
+    "video-player",
+    "h265",
+    "hevc",
+    "h264",
+    "mediabunny",
+    "webcodecs",
+    "canvas",
+    "media-player",
+    "vue-component"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
