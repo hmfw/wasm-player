@@ -1,4 +1,4 @@
-# @mario9/wasm-player
+# @hmfw/wasm-player
 
 基于 Vue 3 + TypeScript + mediabunny 的媒体播放器，支持 H.264、H.265/HEVC 视频和 MP3 等音频格式。
 
@@ -23,7 +23,7 @@
 ## 安装
 
 ```bash
-npm install @mario9/wasm-player
+npm install @hmfw/wasm-player
 ```
 
 ## 快速开始
@@ -35,8 +35,8 @@ npm install @mario9/wasm-player
 </template>
 
 <script setup>
-import { WasmPlayer } from '@mario9/wasm-player'
-import '@mario9/wasm-player/dist/player.css'
+import { WasmPlayer } from '@hmfw/wasm-player'
+import '@hmfw/wasm-player/dist/player.css'
 </script>
 ```
 
